@@ -1,48 +1,116 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useEffect, useState } from 'react';
+import { supabase } from './supabase-client';
+import TextSelector from '@/components/text-selector';
+
+interface Car {
+  modelname: string;
+  typename: string;
+  // aggiungi altre proprietà se presenti
+}
+
+export default function BrandSelector() {
+  const [brands, setBrands] = useState<string[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  const [cars, setCars] = useState<Car[]>([]);
+
+  // Recupera i brand
+  useEffect(() => {
+    const fetchBrands = async () => {
+      const { data, error } = await supabase.rpc('get_all_brands');
+
+      if (error) {
+        console.error("Errore nel recupero dei brand:", error);
+        return;
+      }
+
+      console.log("Dati ricevuti da get_all_brands:", data);
+
+      if (data && Array.isArray(data)) {
+        const brandNames = [
+          "all",
+          ...data
+            .map((b: { make: string }) => b.make)
+            .filter((name) => typeof name === 'string' && name.trim() !== '')
+            .filter((v, i, a) => a.indexOf(v) === i)
+        ];
+
+        console.log("Brand caricati nello state:", brandNames);
+        setBrands(brandNames);
+      }
+    };
+
+    fetchBrands();
+  }, []);
+
+  // Al cambio brand → carica le auto associate
+  useEffect(() => {
+    const fetchCars = async () => {
+      if (!selectedBrand) return;
+
+      const { data, error } =
+        selectedBrand === 'all'
+          ? await supabase.from('cars').select('*').limit(50)
+          : await supabase.rpc('get_cars_by_brand', { brand: selectedBrand });
+
+      if (error) {
+        console.error('Errore nel recupero auto:', error);
+        return;
+      }
+
+      console.log("Auto trovate per", selectedBrand, ":", data);
+      setCars(data || []);
+    };
+
+    fetchCars();
+  }, [selectedBrand]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedBrand(e.target.value);
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/xpertmotive.svg"
-          alt="XpertMotive logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            <span className="text-[#000000] dark:text-[#ffffff]">
-              This is the development version of the XpertMotive app.
-            </span>
-          </li>
-          <li className="mb-2 tracking-[-.01em]">
-            <span className="text-[#000000] dark:text-[#ffffff]">
-              I'll be using this app to test new features and improvements.
-            </span>
-          </li>
-          <li className="mb-2 tracking-[-.01em]">
-            <span className="text-[#000000] dark:text-[#ffffff]">
-              Firstly I'll need to check what Stack use for the backend DB.
-            </span>
-          </li>
-        </ol>
+    <div className="w-full max-w-3xl mx-auto mt-12 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+      <h2 className="text-3xl font-bold mb-6 text-gray-800 text-center">
+        Seleziona una Marca
+      </h2>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://xpertmotive.com"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Go to DB
-          </a>
+      <TextSelector
+        id="brand"
+        label="Marca"
+        value={selectedBrand}
+        onChange={handleChange}
+        disabledOptionText="Seleziona una marca"
+        options={brands}
+      />
+
+      {selectedBrand && (
+        <div className="mt-8">
+          <h3 className="text-xl font-semibold mb-4 text-gray-700">
+            Risultati per:{" "}
+            <span className="text-primary font-bold">
+              {selectedBrand === 'all' ? 'Tutte le marche' : selectedBrand}
+            </span>
+          </h3>
+
+          {cars.length === 0 ? (
+            <p className="text-gray-500">Nessuna auto trovata.</p>
+          ) : (
+            <ul className="grid gap-4 sm:grid-cols-2">
+              {cars.map((car, index) => (
+                <li
+                  key={index}
+                  className="p-4 border rounded-lg bg-gray-50 hover:bg-gray-100 transition"
+                >
+                  <p className="font-medium text-gray-800">{car.modelname}</p>
+                  <p className="text-sm text-gray-600">{car.typename}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-      </footer>
+      )}
     </div>
   );
 }
